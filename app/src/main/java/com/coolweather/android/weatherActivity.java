@@ -1,13 +1,18 @@
 package com.coolweather.android;
 
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Build;
 import android.preference.PreferenceManager;
 import android.provider.ContactsContract;
 import android.support.v4.media.session.IMediaControllerCallback;
+import android.support.v4.view.GravityCompat;
+import android.support.v4.widget.DrawerLayout;
+import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.*;
@@ -39,6 +44,12 @@ public class weatherActivity extends AppCompatActivity {
 
     private ImageView bingPicImg;
 
+    public SwipeRefreshLayout swipeRefreshLayout;
+    private String mWeatherId;
+
+    public DrawerLayout drawerLayout;
+    private Button navButton;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -68,13 +79,15 @@ public class weatherActivity extends AppCompatActivity {
             //有缓存时直接解析天气数据
             Weather weather= Utility.handleWeatherResponse(weatherString);
             showWeatherInfo(weather);
+            mWeatherId=weather.basic.weatherId;
         }else {
             //无缓存时去服务器查询天气
-            String weatherId=getIntent().getStringExtra("weather_id");
-            weatherLayout.setVisibility(View.GONE);
-            requestWeather(weatherId);
-        }
+            String mWeatherId=getIntent().getStringExtra("weather_id");
 
+            weatherLayout.setVisibility(View.INVISIBLE);
+            requestWeather(mWeatherId);
+        }
+        //添加bing图片
         bingPicImg=(ImageView)findViewById(R.id.bing_pic_img);
         String bingPic=preferences.getString("bing_pic",null);
         if(bingPic!=null){
@@ -82,6 +95,26 @@ public class weatherActivity extends AppCompatActivity {
         }else{
             loadBingPic();
         }
+
+        //添加手动刷新
+        swipeRefreshLayout=(SwipeRefreshLayout)findViewById(R.id.swipe_refresh);
+        swipeRefreshLayout.setColorSchemeResources(R.color.colorPrimary);
+        swipeRefreshLayout.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
+            @Override
+            public void onRefresh() {
+                requestWeather(mWeatherId);
+            }
+        });
+
+        //添加滑动页面
+        drawerLayout=(DrawerLayout)findViewById(R.id.drawer_layout);
+        navButton=(Button)findViewById(R.id.nav_button);
+        navButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                drawerLayout.openDrawer(GravityCompat.START);
+            }
+        });
     }
     //根据天气id请求城市天气信息
     public void requestWeather(final String weatherId){
@@ -93,7 +126,9 @@ public class weatherActivity extends AppCompatActivity {
                     @Override
                     public void run() {
                         Toast.makeText(weatherActivity.this,"获取天气信息失败",Toast.LENGTH_SHORT).show();
+                        swipeRefreshLayout.setRefreshing(false);
                     }
+
                 });
             }
 
@@ -108,10 +143,12 @@ public class weatherActivity extends AppCompatActivity {
                             SharedPreferences.Editor editor=PreferenceManager.getDefaultSharedPreferences(weatherActivity.this).edit();
                             editor.putString("weather",responseText);
                             editor.apply();
+                            mWeatherId=weather.basic.weatherId;
                             showWeatherInfo(weather);
                         }else {
                             Toast.makeText(weatherActivity.this,"获取天气信息失败",Toast.LENGTH_SHORT).show();
                         }
+                        swipeRefreshLayout.setRefreshing(false);
                     }
                 });
             }
@@ -156,6 +193,8 @@ public class weatherActivity extends AppCompatActivity {
         sportText.setText(sport);
         weatherLayout.setVisibility(View.VISIBLE);
 
+        Intent intent=new Intent(this,AutoUpdateService.class);
+        startService(intent);
 
     }
 
